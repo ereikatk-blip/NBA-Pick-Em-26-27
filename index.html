@@ -50,7 +50,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 12px;
     }
     .record-title { font-size: 0.75rem; font-weight: 700; color: var(--text-sub); letter-spacing: 1px; }
     .record-value { font-size: 1.2rem; font-weight: 800; margin-top: 4px; }
@@ -64,7 +64,29 @@
         margin-top: 4px;
         display: inline-block;
     }
-    
+    .manual-record-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255,255,255,0.03);
+        border: 1px dashed var(--card-border);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin-bottom: 16px;
+        font-size: 0.75rem;
+        color: var(--text-sub);
+    }
+    .adjust-btn {
+        background: #1e293b;
+        color: #fff;
+        border: 1px solid var(--card-border);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
     .date-nav {
         display: flex;
         justify-content: space-between;
@@ -171,6 +193,16 @@
         </div>
     </div>
 
+    <!-- Manual Record Adjustment Bar -->
+    <div class="manual-record-bar">
+        <span>Adjust Bonus/Past Wins:</span>
+        <div>
+            <button class="adjust-btn" onclick="adjustManualRecord(1, 0)">+1 Win</button>
+            <button class="adjust-btn" onclick="adjustManualRecord(0, 1)">+1 Loss</button>
+            <button class="adjust-btn" onclick="resetManualRecord()">Reset</button>
+        </div>
+    </div>
+
     <div class="date-nav">
         <button class="nav-btn" onclick="changeDate(-1)">◀ Prev</button>
         <div class="current-date-label" id="dateLabel">Loading...</div>
@@ -186,6 +218,7 @@
     let currentDate = new Date('2026-10-20T12:00:00');
     let userPicks = JSON.parse(localStorage.getItem('nba_picks_v3') || '{}');
     let finishedGamesCache = JSON.parse(localStorage.getItem('nba_finished_games') || '{}');
+    let bonusStats = JSON.parse(localStorage.getItem('nba_bonus_stats') || '{"wins": 0, "losses": 0}');
 
     function cleanAbbr(abbr) {
         if (!abbr) return '';
@@ -338,14 +371,27 @@
         setTimeout(() => t.style.display = 'none', 1500);
     }
 
+    function adjustManualRecord(w, l) {
+        bonusStats.wins += w;
+        bonusStats.losses += l;
+        localStorage.setItem('nba_bonus_stats', JSON.stringify(bonusStats));
+        calculateRecord();
+    }
+
+    function resetManualRecord() {
+        bonusStats = {wins: 0, losses: 0};
+        localStorage.setItem('nba_bonus_stats', JSON.stringify(bonusStats));
+        calculateRecord();
+    }
+
     function calculateRecord() {
-        let wins = 0, losses = 0;
+        let wins = bonusStats.wins, losses = bonusStats.losses;
         let sortedFinished = Object.keys(finishedGamesCache)
             .map(id => ({ id, ...finishedGamesCache[id] }))
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        let currentStreak = 0;
-        let streakType = null;
+        let currentStreak = bonusStats.wins;
+        let streakType = bonusStats.wins > 0 ? 'W' : null;
 
         sortedFinished.forEach(game => {
             let rawPick = userPicks[game.id];
