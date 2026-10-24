@@ -139,12 +139,13 @@
         align-items: center;
         transition: all 0.2s;
     }
-    .team-box.disabled { opacity: 0.75; cursor: not-allowed; }
+    .team-box.disabled { opacity: 0.85; cursor: not-allowed; }
     .team-box img { width: 48px; height: 48px; object-fit: contain; margin-bottom: 8px; }
     .team-name { font-size: 0.85rem; font-weight: 700; margin-bottom: 2px; }
     .win-prob { font-size: 0.7rem; color: var(--accent-blue); font-weight: 600; margin-bottom: 4px; }
     .team-score { font-size: 1.1rem; font-weight: 800; margin: 4px 0; color: #fff; }
     .team-sub { font-size: 0.65rem; color: var(--text-sub); margin-bottom: 8px; }
+    
     .pick-btn {
         width: 80%;
         padding: 6px 0;
@@ -158,6 +159,13 @@
     }
     .team-box.selected { border-color: var(--accent-blue); background: rgba(0, 210, 255, 0.1); }
     .team-box.selected .pick-btn { background: var(--accent-blue); color: #000; border-color: var(--accent-blue); }
+
+    /* Result states for finished games */
+    .team-box.correct-win { border-color: var(--accent-green) !important; background: rgba(16, 185, 129, 0.15) !important; }
+    .team-box.correct-win .pick-btn { background: var(--accent-green) !important; color: #000 !important; border-color: var(--accent-green) !important; }
+
+    .team-box.wrong-loss { border-color: var(--accent-red) !important; background: rgba(239, 68, 68, 0.15) !important; }
+    .team-box.wrong-loss .pick-btn { background: var(--accent-red) !important; color: #fff !important; border-color: var(--accent-red) !important; }
     
     #toast {
         position: fixed;
@@ -215,7 +223,7 @@
 <div id="toast">Picks Saved!</div>
 
 <script>
-    let currentDate = new Date('2026-10-20T12:00:00');
+    let currentDate = new Date(); // Starts on today's live date
     let userPicks = JSON.parse(localStorage.getItem('nba_picks_v3') || '{}');
     let finishedGamesCache = JSON.parse(localStorage.getItem('nba_finished_games') || '{}');
     let bonusStats = JSON.parse(localStorage.getItem('nba_bonus_stats') || '{"wins": 0, "losses": 0}');
@@ -306,18 +314,53 @@
             let homeProbText = homeProb ? `📊 ${homeProb} Win Prob` : '';
             let awayProbText = awayProb ? `📊 ${awayProb} Win Prob` : '';
 
+            let winnerAbbr = null;
             if (status === 'post') {
                 let homeScore = parseInt(home.score || 0);
                 let awayScore = parseInt(away.score || 0);
+                winnerAbbr = homeScore > awayScore ? homeAbbr : awayAbbr;
                 finishedGamesCache[gameId] = {
                     date: event.date,
-                    winner: homeScore > awayScore ? homeAbbr : awayAbbr
+                    winner: winnerAbbr
                 };
                 localStorage.setItem('nba_finished_games', JSON.stringify(finishedGamesCache));
+            } else if (finishedGamesCache[gameId]) {
+                winnerAbbr = finishedGamesCache[gameId].winner;
             }
 
             let rawPick = userPicks[gameId] || null;
             let pickedTeam = cleanAbbr(rawPick);
+
+            // Determine check or X styling if game is final and picked
+            let awayClass = '';
+            let homeClass = '';
+            let awayBtnText = pickedTeam === awayAbbr ? (isLocked ? '🔒 Picked' : '✓ Selected') : (isLocked ? '🔒 Locked' : 'Pick');
+            let homeBtnText = pickedTeam === homeAbbr ? (isLocked ? '🔒 Picked' : '✓ Selected') : (isLocked ? '🔒 Locked' : 'Pick');
+
+            if (status === 'post' && pickedTeam) {
+                if (pickedTeam === awayAbbr) {
+                    if (pickedTeam === winnerAbbr) {
+                        awayClass = 'correct-win';
+                        awayBtnText = '✓ Correct';
+                    } else {
+                        awayClass = 'wrong-loss';
+                        awayBtnText = '✗ Incorrect';
+                    }
+                }
+                if (pickedTeam === homeAbbr) {
+                    if (pickedTeam === winnerAbbr) {
+                        homeClass = 'correct-win';
+                        homeBtnText = '✓ Correct';
+                    } else {
+                        homeClass = 'wrong-loss';
+                        homeBtnText = '✗ Incorrect';
+                    }
+                }
+            } else if (pickedTeam === awayAbbr) {
+                awayClass = 'selected';
+            } else if (pickedTeam === homeAbbr) {
+                homeClass = 'selected';
+            }
 
             let cardHtml = `
                 <div class="game-card" data-game-id="${gameId}">
@@ -326,21 +369,21 @@
                         <span class="status-badge ${status}">${status === 'in' ? 'LIVE' : (status === 'post' ? 'FINAL' : (isLocked ? '🔒 LOCKED' : 'UPCOMING'))}</span>
                     </div>
                     <div class="teams-grid">
-                        <div class="team-box ${pickedTeam === awayAbbr ? 'selected' : ''} ${isLocked ? 'disabled' : ''}" onclick="makePick('${gameId}', '${awayAbbr}', ${isLocked})">
+                        <div class="team-box ${awayClass} ${isLocked ? 'disabled' : ''}" onclick="makePick('${gameId}', '${awayAbbr}', ${isLocked})">
                             <img src="${away.team.logo}" alt="${awayAbbr}">
                             <div class="team-name">${away.team.displayName}</div>
                             <div class="win-prob">${awayProbText}</div>
                             ${status !== 'pre' ? `<div class="team-score">${away.score}</div>` : ''}
                             <div class="team-sub">${awayAbbr} • AWAY</div>
-                            <button class="pick-btn">${pickedTeam === awayAbbr ? (isLocked ? '🔒 Picked' : '✓ Selected') : (isLocked ? '🔒 Locked' : 'Pick')}</button>
+                            <button class="pick-btn">${awayBtnText}</button>
                         </div>
-                        <div class="team-box ${pickedTeam === homeAbbr ? 'selected' : ''} ${isLocked ? 'disabled' : ''}" onclick="makePick('${gameId}', '${homeAbbr}', ${isLocked})">
+                        <div class="team-box ${homeClass} ${isLocked ? 'disabled' : ''}" onclick="makePick('${gameId}', '${homeAbbr}', ${isLocked})">
                             <img src="${home.team.logo}" alt="${homeAbbr}">
                             <div class="team-name">${home.team.displayName}</div>
                             <div class="win-prob">${homeProbText}</div>
                             ${status !== 'pre' ? `<div class="team-score">${home.score}</div>` : ''}
                             <div class="team-sub">${homeAbbr} • HOME</div>
-                            <button class="pick-btn">${pickedTeam === homeAbbr ? (isLocked ? '🔒 Picked' : '✓ Selected') : (isLocked ? '🔒 Locked' : 'Pick')}</button>
+                            <button class="pick-btn">${homeBtnText}</button>
                         </div>
                     </div>
                 </div>
